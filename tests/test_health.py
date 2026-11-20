@@ -52,3 +52,24 @@ def test_summarize_no_broken():
     s = health.summarize(make_df([("a/one", 1, "RUNNING")]))
     assert s["broken_pct"] == 0.0
     assert s["top_broken"].empty
+
+def test_changes_newly_broken_and_recovered():
+    prev = make_df([("a/one", 1, "RUNNING"), ("a/two", 2, "RUNTIME_ERROR")])
+    curr = make_df([("a/one", 1, "RUNTIME_ERROR"), ("a/two", 2, "RUNNING")])
+    out = health.changes(prev, curr).set_index("id")
+    assert out.loc["a/one", "kind"] == "newly_broken"
+    assert out.loc["a/two", "kind"] == "recovered"
+
+
+def test_changes_other_and_same_status():
+    prev = make_df([("a/one", 1, "RUNNING"), ("a/two", 2, "RUNTIME_ERROR")])
+    curr = make_df([("a/one", 1, "SLEEPING"), ("a/two", 2, "BUILD_ERROR")])
+    out = health.changes(prev, curr).set_index("id")
+    assert out.loc["a/one", "kind"] == "other"  # healthy -> idle
+    assert "a/two" not in out.index  # still broken, so no change
+
+
+def test_changes_ignores_new_and_missing_spaces():
+    prev = make_df([("a/one", 1, "RUNNING"), ("a/gone", 3, "RUNNING")])
+    curr = make_df([("a/one", 1, "RUNNING"), ("a/new", 4, "RUNTIME_ERROR")])
+    assert health.changes(prev, curr).empty

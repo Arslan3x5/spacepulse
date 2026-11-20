@@ -52,3 +52,24 @@ def summarize(df, top=10):
         "broken_pct": round(100 * broken / known, 1) if known else 0.0,
         "top_broken": top_broken,
     }
+
+def _kind(was, now):
+    if now == "broken":
+        return "newly_broken"
+    if was == "broken" and now in ("healthy", "idle"):
+        return "recovered"
+    return "other"
+
+
+def changes(prev, curr):
+    """Spaces whose status changed between two snapshots.
+
+    Only Spaces present in both snapshots are compared. `kind` is
+    newly_broken, recovered or other.
+    """
+    before = add_status(prev)[["id", "status"]].rename(columns={"status": "was"})
+    after = add_status(curr)[["id", "likes", "status"]].rename(columns={"status": "now"})
+    merged = after.merge(before, on="id")
+    merged = merged[merged["was"] != merged["now"]].copy()
+    merged["kind"] = [_kind(w, n) for w, n in zip(merged["was"], merged["now"])]
+    return merged[["id", "likes", "was", "now", "kind"]].reset_index(drop=True)
