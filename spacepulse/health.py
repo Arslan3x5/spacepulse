@@ -73,3 +73,24 @@ def changes(prev, curr):
     merged = merged[merged["was"] != merged["now"]].copy()
     merged["kind"] = [_kind(w, n) for w, n in zip(merged["was"], merged["now"])]
     return merged[["id", "likes", "was", "now", "kind"]].reset_index(drop=True)
+
+def days_broken(history):
+    """How many consecutive snapshots (days, if collected daily) each Space has been broken.
+
+    Snapshots with an unknown status (for example an API failure) are skipped,
+    because they say nothing about the Space. Returns a Series indexed by Space
+    id, longest first. Spaces that are not broken in their latest known
+    snapshot are left out.
+    """
+    h = add_status(history)
+    h = h[h["status"] != "unknown"].sort_values(["id", "date"])
+    result = {}
+    for space_id, group in h.groupby("id"):
+        streak = 0
+        for status in reversed(group["status"].tolist()):
+            if status != "broken":
+                break
+            streak += 1
+        if streak:
+            result[space_id] = streak
+    return pd.Series(result, name="days_broken", dtype="int64").sort_values(ascending=False)

@@ -73,3 +73,45 @@ def test_changes_ignores_new_and_missing_spaces():
     prev = make_df([("a/one", 1, "RUNNING"), ("a/gone", 3, "RUNNING")])
     curr = make_df([("a/one", 1, "RUNNING"), ("a/new", 4, "RUNTIME_ERROR")])
     assert health.changes(prev, curr).empty
+
+HISTORY_COLUMNS = ["date", "id", "likes", "stage"]
+
+
+def make_history(rows):
+    return pd.DataFrame(rows, columns=HISTORY_COLUMNS)
+
+
+def test_days_broken_counts_consecutive_days():
+    history = make_history([
+        ("2026-11-15", "a/one", 1, "RUNNING"),
+        ("2026-11-16", "a/one", 1, "RUNTIME_ERROR"),
+        ("2026-11-17", "a/one", 1, "RUNTIME_ERROR"),
+        ("2026-11-15", "a/two", 2, "RUNTIME_ERROR"),
+        ("2026-11-16", "a/two", 2, "RUNTIME_ERROR"),
+        ("2026-11-17", "a/two", 2, "RUNTIME_ERROR"),
+    ])
+    out = health.days_broken(history)
+    assert out["a/two"] == 3
+    assert out["a/one"] == 2
+    assert out.index[0] == "a/two"  # longest first
+
+
+def test_days_broken_ignores_recovered_spaces():
+    history = make_history([
+        ("2026-11-16", "a/one", 1, "RUNTIME_ERROR"),
+        ("2026-11-17", "a/one", 1, "RUNNING"),
+    ])
+    assert health.days_broken(history).empty
+
+
+def test_days_broken_skips_unknown_days():
+    history = make_history([
+        ("2026-11-15", "a/one", 1, "RUNTIME_ERROR"),
+        ("2026-11-16", "a/one", 1, "ERROR_Timeout"),  # API failure, says nothing
+        ("2026-11-17", "a/one", 1, "RUNTIME_ERROR"),
+    ])
+    assert health.days_broken(history)["a/one"] == 2
+
+
+def test_days_broken_empty_history():
+    assert health.days_broken(make_history([])).empty
