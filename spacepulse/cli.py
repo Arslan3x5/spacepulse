@@ -20,6 +20,19 @@ def run(api, limit=200, out_dir="data", date=None):
     return df, path
 
 
+def upload(api, path, repo_id):
+    """Upload one snapshot CSV to a public dataset repo on the Hub."""
+    path = Path(path)
+    api.create_repo(repo_id, repo_type="dataset", exist_ok=True, private=False)
+    api.upload_file(
+        path_or_fileobj=str(path),
+        path_in_repo=f"data/{path.name}",
+        repo_id=repo_id,
+        repo_type="dataset",
+        commit_message=f"snapshot {path.stem}",
+    )
+
+
 def print_summary(df):
     s = health.summarize(df)
     print(f"Checked {s['total']} Spaces: {s['counts']}")
@@ -35,9 +48,14 @@ def main(argv=None):
     )
     parser.add_argument("--limit", type=int, default=200, help="how many Spaces to check (default 200)")
     parser.add_argument("--out", default="data", help="folder for the CSV snapshot (default: data)")
+    parser.add_argument("--upload", metavar="REPO", help="also upload the snapshot to this dataset repo, e.g. user/spacepulse-history (needs HF_TOKEN)")
     args = parser.parse_args(argv)
 
     print(f"Checking {args.limit} Spaces, this takes about {round(args.limit * 0.35)} seconds...")
-    df, path = run(HfApi(), limit=args.limit, out_dir=args.out)
+    api = HfApi()
+    df, path = run(api, limit=args.limit, out_dir=args.out)
     print(f"Saved {path}")
+    if args.upload:
+        upload(api, path, args.upload)
+        print(f"Uploaded to https://huggingface.co/datasets/{args.upload}")
     print_summary(df)

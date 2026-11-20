@@ -44,3 +44,36 @@ def test_main_prints_summary(tmp_path, monkeypatch, capsys):
     output = capsys.readouterr().out
     assert "Broken: 50.0%" in output
     assert "a/two" in output
+
+def test_upload_creates_public_dataset_and_uploads_file(tmp_path):
+    calls = []
+
+    class Api:
+        def create_repo(self, repo_id, **kwargs):
+            calls.append(("create", repo_id, kwargs))
+
+        def upload_file(self, **kwargs):
+            calls.append(("upload", kwargs))
+
+    snapshot = tmp_path / "2026-11-20.csv"
+    snapshot.write_text("id,stage\n")
+    cli.upload(Api(), snapshot, "me/spacepulse-history")
+    assert calls[0][0] == "create"
+    assert calls[0][2]["private"] is False
+    assert calls[1][1]["path_in_repo"] == "data/2026-11-20.csv"
+    assert calls[1][1]["repo_id"] == "me/spacepulse-history"
+
+
+def test_main_uploads_only_when_asked(tmp_path, monkeypatch):
+    uploads = []
+    fake = FakeApi({"a/one": "RUNNING"})
+    fake.create_repo = lambda repo_id, **kwargs: None
+    fake.upload_file = lambda **kwargs: uploads.append(kwargs)
+    monkeypatch.setattr(cli, "HfApi", lambda: fake)
+
+    cli.main(["--limit", "1", "--out", str(tmp_path)])
+    assert uploads == []  # no --upload, no upload
+
+    cli.main(["--limit", "1", "--out", str(tmp_path), "--upload", "me/hist"])
+    assert len(uploads) == 1
+    assert uploads[0]["repo_id"] == "me/hist"
