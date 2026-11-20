@@ -1,0 +1,20 @@
+name: daily-snapshot
+
+on:
+  schedule:
+    - cron: "30 3 * * *"   # every day at 03:30 UTC
+  workflow_dispatch:        # lets you run it by hand from the Actions tab
+
+jobs:
+  snapshot:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - run: pip install -e .
+      - run: python -m spacepulse --limit 200 --upload arslan3x5/spacepulse-history
+        env:
+          HF_TOKEN: ${{ secrets.HF_TOKEN }}
